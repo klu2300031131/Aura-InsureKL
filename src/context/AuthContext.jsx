@@ -14,40 +14,22 @@ export const AuthProvider = ({ children }) => {
     // Load from local storage on mount
     const storedUser = localStorage.getItem('insureklUser');
     const storedPlan = localStorage.getItem('insureklPlan');
-    const storedClaims = localStorage.getItem('insureklClaims');
+    const allClaims = JSON.parse(localStorage.getItem('insureklClaims') || '[]');
     
-    if (storedUser) setUser(JSON.parse(storedUser));
+    let currentUser = null;
+    if (storedUser) {
+      currentUser = JSON.parse(storedUser);
+      setUser(currentUser);
+    }
+    
     if (storedPlan) setActivePlan(JSON.parse(storedPlan));
     
-    if (storedClaims) {
-      setClaims(JSON.parse(storedClaims));
+    if (currentUser) {
+      // Filter claims for the logged-in user
+      const userClaims = allClaims.filter(c => c.userEmail === currentUser.email);
+      setClaims(userClaims);
     } else {
-      // Default Mock Data for new sessions
-      const initialMockClaims = [
-        { 
-           id: 'PR-091A-8B2', date: 'March 18, 2026', amount: '₹300', status: 'approved', 
-           reason: 'High Rainfall (52.4 mm/hr) in Indiranagar',
-           transactionId: 'TXN-982319-IND-POL-0x89A',
-           disputeStatus: 'N/A (Auto-Executed)',
-           timeToProcess: '120ms (Smart Contract)'
-        },
-        { 
-           id: 'PR-088B-2X1', date: 'March 10, 2026', amount: '₹150', status: 'approved', 
-           reason: 'Unplanned Road Closure in Koramangala',
-           transactionId: 'TXN-771120-KOR-MAN-0x45B',
-           disputeStatus: 'Manual Dispute: Verified by AI',
-           timeToProcess: '14 mins (Dispute Resolution)'
-        },
-        { 
-           id: 'LX-441P-009', date: 'March 02, 2026', amount: '₹0', status: 'denied', 
-           reason: 'Rainfall did not meet parametric threshold (9.2 mm/hr)',
-           transactionId: 'REJECTED-009',
-           disputeStatus: 'Dispute Denied (Fraud Detected)',
-           timeToProcess: 'N/A'
-        }
-      ];
-      setClaims(initialMockClaims);
-      localStorage.setItem('insureklClaims', JSON.stringify(initialMockClaims));
+      setClaims([]);
     }
     
     setLoading(false);
@@ -62,6 +44,9 @@ export const AuthProvider = ({ children }) => {
       setUser(existing);
       localStorage.setItem('insureklUser', JSON.stringify(existing));
       
+      // Load this user's claims
+      const allClaims = JSON.parse(localStorage.getItem('insureklClaims') || '[]');
+      setClaims(allClaims.filter(c => c.userEmail === email));
       // Look up if this old user previously selected a plan
       const userPlans = JSON.parse(localStorage.getItem('insureklUserPlans') || '{}');
       if (userPlans[existing.email]) {
@@ -85,12 +70,14 @@ export const AuthProvider = ({ children }) => {
     
     setUser(newUser);
     localStorage.setItem('insureklUser', JSON.stringify(newUser));
+    setClaims([]); // New user starts with empty history
     return true;
   };
 
   const logout = () => {
     setUser(null);
     setActivePlan(null);
+    setClaims([]);
     localStorage.removeItem('insureklUser');
     localStorage.removeItem('insureklPlan');
   };
@@ -107,11 +94,17 @@ export const AuthProvider = ({ children }) => {
   };
 
   const addClaim = (claimObj) => {
-    setClaims(prev => {
-      const updated = [claimObj, ...prev];
-      localStorage.setItem('insureklClaims', JSON.stringify(updated));
-      return updated;
-    });
+    if (!user) return;
+    
+    const claimWithUser = { ...claimObj, userEmail: user.email };
+    
+    // Add to state
+    setClaims(prev => [claimWithUser, ...prev]);
+    
+    // Add to all claims in localStorage
+    const allClaims = JSON.parse(localStorage.getItem('insureklClaims') || '[]');
+    const updatedAllClaims = [claimWithUser, ...allClaims];
+    localStorage.setItem('insureklClaims', JSON.stringify(updatedAllClaims));
   };
 
   return (
